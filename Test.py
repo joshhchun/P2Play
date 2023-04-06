@@ -1,52 +1,56 @@
 #!/usr/bin/env python3
 from Peer import Peer
-import sys
 import threading
 
 def test_node_lookup():
     threads = []
-    peers = []
-    # Node 1 in thread 1
+    peers   = []
     peer1 = Peer(_id=1)
     peers.append(peer1)
-    host, port, node_id = peer1.get_info()
+
     # Run the node in a thread
     t1 = threading.Thread(target=peer1.run)
     t1.start()
     threads.append(t1)
 
+    old = peer1
     # Put nodes 1-35 in the routing table of node 1 all in different threads
-    for i in range(1, 36):
-        print(f"Adding node {i} to routing table of node 1")
-        new_peer = Peer(bs_host=peer1.node.ip, bs_port=peer1.node.port, bs_id=peer1.node.id, _id=i)
+    for i in range(2, 151):
+        new_peer = Peer(bs_host=old.node.ip, bs_port=old.node.port, bs_id=old.node.id, _id=i)
         peers.append(new_peer)
-        t = threading.Thread(target=new_peer.run) 
+        t = threading.Thread(target=new_peer.run)
         t.start()
         threads.append(t)
-    
-    
-    # Node 2**159
-    peer5 = peers[4]
-    peer2 = Peer(bs_host=peer5.node.ip, bs_port=peer5.node.port, bs_id=peer5.node.id, _id=2**159)
-    print(f"Peer 2**159 routing table: {peer2.routing_table}")
+        old = new_peer
 
-    
-    # Node_lookup on 2**159 from node 1
-    x = peer1.iterative_node_lookup(2**159)
-    print(f"Closest nodes found in network to 2**159: {x}")
-    print(x)
+    print("-------\n")
 
-        
-    # Get routing info from node 1
-    for t in threads:
-        t.join()
+    print("Peer 150 routing table:")
+    print(peers[149].routing_table)
 
 
+    """
+    def run(self) -> None:
+        for file in select.select(things, [], [])[0]:
+            
 
-    
-    
+
+    def callback(results: List[Peer]) -> None:
+        ...
+
+    iterative_node_lookup(target_id, callback)
+    """
 
 
+
+    # print(f"peer4: {peer4.routing_table}")
+    # x = peer4.iterative_node_lookup(4)
+    # print(f"x: {x}")
+    # print(f"Closest nodes found in network to 2**159: {x}")
+
+    # iterative_node_lookup(number: int, callback: Callable[]) -> None
+    # Maybe make it immediately return and then have a function like
+    # peer.serve() That runs forever `select`
 
 
 def main():

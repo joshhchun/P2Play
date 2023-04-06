@@ -1,13 +1,13 @@
 from __future__ import annotations
-from random import getrandbits
-from hashlib import sha1
+from random     import getrandbits
+from hashlib    import sha1
 
 class Node:
-    def __init__(self, _id: int = None, ip: str = None, port: int = None):
+    def __init__(self, _id: int = None, ip: str = None, port: int = None) -> None:
         self.id      = _id or self.generate_id()
         self.ip      = ip
         self.port    = port
-    
+
     # def __iter__(self):
     #     return iter([self.ip, self.port, self.node_id])
 

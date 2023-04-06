@@ -12,10 +12,15 @@ class RoutingTable:
             return
         bucket_index = self.get_bucket_index(node.id)
         bucket = self.k_buckets[bucket_index]
-        if node not in bucket and len(bucket) < 20:
+        if self.not_in_bucket(bucket, node) and len(bucket) < 20:
             bucket.append(node)
         # TODO: Handle the case where the bucket is full
     
+    def not_in_bucket(self, bucket, node):
+        for n in bucket:
+            if n.id == node.id:
+                return False
+        return True
     
     def remove_node(self, node: Node):
         bucket_index = self.get_bucket_index(node.id)
@@ -29,7 +34,20 @@ class RoutingTable:
     
     def __repr__(self):
         result = []
-        for buck in self.k_buckets:
-            for node in buck:
-                result.append(str(node))
-        return ', '.join(result)
+        for i, buck in enumerate(self.k_buckets):
+            if len(buck) == 0:
+                continue
+            result.append(f'Bucket {i}: {buck}')
+        return '\n'.join(result)
+
+    def __len__(self):
+        return sum([len(bucket) for bucket in self.k_buckets])
+    
+    def __contains__(self, node_id: int):
+        bucket_index = self.get_bucket_index(node_id)
+        bucket = self.k_buckets[bucket_index]
+        for node in bucket:
+            if node.id == node_id:
+                return True
+        return False
+        
