@@ -17,6 +17,9 @@ class Node:
     
     def distance(self, other: Node) -> int:
         return self.id ^ other.id
+    
+    def same_addr(self, node: Node) -> bool:
+        return self.ip == node.ip and self.port == node.port
 
     def __repr__(self):
         return f'Node({self.id})'

@@ -69,10 +69,12 @@ class Peer:
     def __init__(self, port: int = 0, bs_host: str = None, bs_port: int = None, bs_id: int = None, _id = None):
         self.node          = Node(_id=_id)
         self.socket        = self.create_socket(port)
-        self.routing_table = RoutingTable(self.node.id)
+        self.table = RoutingTable(self.node.id)
         self.retry_count   = 5
         self.retry_delay   = 5
         self.k             = 20
+        # TODO: Figure out storage 
+        self.storage       = {}
         self.fill_routing(bs_host, bs_port, bs_id)
 
     def create_socket(self, port) -> socket.socket:
@@ -100,7 +102,7 @@ class Peer:
         Finds the closest k nodes to the target_id, iteratively.
         '''
         # Finds ALPHA (3) closest nodes to the target_id, and push to the closest list (acts as starting point)
-        neighbors    = self.find_kclosest(target_id, ALPHA)
+        neighbors    = self.table.find_kclosest(target_id, ALPHA)
         closest_list = KClosestPeers(self.node)
         closest_list.push_nodes(neighbors)
 
@@ -113,7 +115,7 @@ class Peer:
             for node in nearest_nodes:
                 closest_list.contacted.add(node.id)
                 if node.id == target_id:
-                    temp_list = self.find_kclosest(target_id, self.k)
+                    temp_list = self.table.find_kclosest(target_id)
                     continue
                 else:
                     temp_list = self.find_node(node, target_id)
@@ -122,21 +124,6 @@ class Peer:
         # Return the k closest nodes to the target_id
         return closest_list.result()
 
-    def find_kclosest(self, target_id: int, limit: int = 20) -> list[Node]:
-        '''
-        Returns the k closest nodes to the target_id.
-        Params: target_id - int, limit - int
-        Returns: list of Node objects
-        '''
-        target       = Node(_id=target_id)
-        closest_list = []
-        for bucket in self.routing_table.k_buckets:
-            for node in bucket:
-                distance = target.distance(node)
-                heapq.heappush(closest_list, (distance, node.id, node.ip, node.port))
-        
-        return [Node(*args) for _, *args in heapq.nsmallest(limit, closest_list)]
-    
     
     # def ping(self, dest_node: Node) -> bool:
     #     '''
@@ -195,11 +182,11 @@ class Peer:
 
         # Boostrap node	
         bs_node = Node(bs_id, bs_host, bs_port)
-        self.routing_table.add_node(bs_node)
+        self.table.add_node(bs_node)
 
         # Find k closest nodes to self
         for node in self.iterative_node_lookup(self.node.id):
-            self.routing_table.add_node(node)
+            self.table.add_node(node)
     
     def get_info(self):
         return (self.node.ip, self.node.port, self.node.id)
@@ -229,9 +216,9 @@ class Peer:
     def handle_find_node(self, message, ip, port):
         target_id   = int(message["target_id"])
         source_node = Node(int(message["node_id"]), ip, port)
-        self.routing_table.add_node(source_node)
+        self.table.add_node(source_node)
 
-        kclosest = self.find_kclosest(target_id)
+        kclosest = self.table.find_kclosest(target_id)
         response = {
             'type'        : 'FIND_NODE_RESPONSE',
             'node_id'     : self.node.id,
