@@ -1,16 +1,48 @@
 #!/usr/bin/env python3
 from Node import Node
+from Bucket import Bucket
 import heapq
+import asyncio
 
 class RoutingTable:
 	def __init__(self, id):
-		self.node_id = id
-		self.k = 20
-		self.k_buckets = [[] for _ in range(160)]
+		self.node_id   = id
+		self.k         = 20
+		self.k_buckets = [Bucket((0, 2**160), self.k)]
 	
-	#TODO: def try_add()
-	def try_add():
+	def greet() -> None:
+		'''
+		Try to add node to routing table
+  		'''
 		...
+	
+	def add_node(self, node: Node):
+		'''
+		Adds a node to the routing table.
+		Params: Node
+		Returns: None
+  		'''
+		index  = self.get_bucket_index(node.id)
+		bucket = self.k_buckets[index]
+
+		# If bucket is not full then simply add the node and return
+		if bucket.add_node(node):
+			return
+		
+		# If the bucket is full and if the buckets range includes the node's id, then split the bucket
+		# Sec 4.2
+		'''
+		If we just see if range includes nodes own id, also splits ranges not containing node's id
+		up to b-1 levels. If b=2, then half of the ID space not containing the nodes id 
+  		'''
+		if bucket.in_range(node.id) or bucket.depth % 5:
+			self.split_bucket(bucket, node)
+			self.add_node(node)
+		else:
+			# If we cant split bucket then try to ping the oldest node in the bucket and if it doesn't respond then replace it
+			# Make sure that if the node doesn't respond to remove it from routing table
+			asyncio.ensure_future(self.protocol.ping(bucket.oldest))
+	
 
 	def find_kclosest(self, target_id: int, limit: int = 20, exclude=None) -> list[Node]:
 		'''
@@ -44,7 +76,9 @@ class RoutingTable:
 				return False
 		return True
 	
-	def remove_node(self, node: Node):
+	def remove_node(self, node: Node, _id: int = None):
+		if _id:
+			node = Node(_id=_id)
 		bucket_index = self.get_bucket_index(node.id)
 		bucket = self.k_buckets[bucket_index]
 		if node in bucket:

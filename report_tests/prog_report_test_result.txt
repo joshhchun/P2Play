@@ -1,0 +1,58 @@
+Peer 1 routing table:
+Bucket 1: [Node(2), Node(3)]
+Bucket 2: [Node(4), Node(5), Node(6), Node(7)]
+Bucket 3: [Node(8), Node(9), Node(10), Node(11), Node(12), Node(13), Node(14), Node(15)]
+Bucket 4: [Node(16), Node(17), Node(18), Node(19), Node(20), Node(21), Node(22), Node(23), Node(24), Node(25)]
+Bucket 5: [Node(32), Node(33), Node(34), Node(35), Node(36), Node(37), Node(38), Node(39), Node(40), Node(41), Node(48)]
+Bucket 6: [Node(64), Node(65), Node(66), Node(67), Node(68), Node(69), Node(70), Node(71), Node(72), Node(73), Node(80)]
+Bucket 7: [Node(128), Node(129), Node(130), Node(131), Node(132), Node(133), Node(134), Node(135), Node(136), Node(137), Node(144)]
+
+Peer 50 routing table:
+Bucket 0: [Node(51)]
+Bucket 1: [Node(49), Node(48)]
+Bucket 2: [Node(52), Node(53), Node(54), Node(55)]
+Bucket 3: [Node(56), Node(57), Node(58), Node(59), Node(60), Node(61), Node(62), Node(63)]
+Bucket 4: [Node(34), Node(35), Node(32), Node(33), Node(38), Node(39), Node(36), Node(37), Node(42), Node(43), Node(40), Node(41), Node(46), Node(47), Node(44), Node(45)]
+Bucket 5: [Node(18), Node(19)]
+Bucket 6: [Node(64)]
+
+Peer 99 routing table:
+Bucket 0: [Node(98)]
+Bucket 1: [Node(97), Node(96)]
+Bucket 2: [Node(100), Node(101), Node(102), Node(103)]
+Bucket 3: [Node(104), Node(105), Node(106), Node(107), Node(108), Node(109), Node(110), Node(111)]
+Bucket 4: [Node(112), Node(113), Node(114), Node(115), Node(116), Node(117), Node(118), Node(119), Node(120), Node(121), Node(122), Node(123)]
+Bucket 5: [Node(67), Node(66), Node(65), Node(64), Node(71), Node(70), Node(69), Node(68), Node(75), Node(74), Node(73), Node(72), Node(79), Node(78), Node(77), Node(76), Node(83)]
+Bucket 7: [Node(128)]
+
+Peer 100 routing table:
+Bucket 0: [Node(101)]
+Bucket 1: [Node(102), Node(103)]
+Bucket 2: [Node(99), Node(96), Node(97), Node(98)]
+Bucket 3: [Node(104), Node(105), Node(106), Node(107), Node(108), Node(109), Node(110), Node(111)]
+Bucket 4: [Node(112), Node(113), Node(114), Node(115), Node(116), Node(117), Node(118), Node(119), Node(120)]
+Bucket 5: [Node(68), Node(69), Node(70), Node(71), Node(64), Node(65), Node(66), Node(67), Node(76), Node(77), Node(78), Node(79), Node(72), Node(73), Node(74), Node(75)]
+Bucket 7: [Node(128)]
+
+Peer 145 routing table:
+Bucket 0: [Node(144)]
+Bucket 1: [Node(146), Node(147)]
+Bucket 2: [Node(148), Node(149), Node(150)]
+Bucket 4: [Node(129), Node(128), Node(131), Node(130), Node(133), Node(132), Node(135), Node(134), Node(137), Node(136), Node(139), Node(138), Node(141), Node(140), Node(143), Node(142)]
+Bucket 7: [Node(17), Node(16), Node(19)]
+**MAX=130 at 19**
+
+Peer 146 routing table:
+Bucket 0: [Node(147)]
+Bucket 1: [Node(145), Node(144)]
+Bucket 2: [Node(148), Node(149), Node(150)]
+Bucket 4: [Node(130), Node(131), Node(128), Node(129), Node(134), Node(135), Node(132), Node(133), Node(138), Node(139), Node(136), Node(137), Node(142), Node(143), Node(140), Node(141)]
+Bucket 7: [Node(18), Node(19)]
+**MAX=129 at peer19**
+
+**146 HAS PEER 18 AND 145 DOES NOT, 146^18=128, 145^18=131**
+
+Peer 150 routing table:
+Bucket 1: [Node(149), Node(148)]
+Bucket 2: [Node(146), Node(147), Node(144), Node(145)]
+Bucket 4: [Node(134)
