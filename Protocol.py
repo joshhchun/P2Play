@@ -2,7 +2,7 @@ import asyncio
 import logging
 import json
 from   random import getrandbits
-from Node import Node
+from   Node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +51,11 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             return
 
         try:
-            result = await func(addr, **response["args"])
+            result = await func(addr, *response["args"])
+            response = self.create_response(response["id"], result, None)
         except Exception as e:
             logger.exception("Error handling RPC request from %s: %s", addr, method)
             response = self.create_response(response["id"], None, e)
-        response = self.create_response(response["id"], result, None)
 
         text = json.dumps(response)
         data = text.encode("utf-8")
@@ -71,7 +71,12 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     #         # We could not figure out the type of the error.
     #         return Exception(response["type"], *response["args"])
 
-    def handle_response(self, response) -> None:
+    def handle_response(self, response: dict) -> None:
+        '''
+        Handle a response from a RPC call we made
+        Params: response (dict)
+        Returns: None
+        '''
         msg_id = response["id"]
         if msg_id not in self.outstanding:
             logger.warning("Received response for unknown request: %s", msg_id)
@@ -85,34 +90,36 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         #     error = self.parse_error(response["error"])
         #     return future.set_exception(error)
 
-        future.set_result(response["result"])
-        del self.outstanding[msg_id]
+        future.set_result((response["result"], None))
+        self.client.table.greet()
 
     def create_request(self, method, *args, **kwargs) -> dict:
         return {
-            "id": getrandbits(64),
-            "method": method,
-            "args": list(args),
-            "kwargs": kwargs,
+            "type"   : "request",
+            "id"     : getrandbits(64),
+            "method" : method,
+            "args"   : list(args),
+            "kwargs" : kwargs,
         }
 
-    def on_request_timeout(self, id) -> None:
-        error = asyncio.TimeoutError("Request %d timed out." % id)
+    def _on_timeout(self, id) -> None:
+        logger.error("Request %d timed out.", id)
+        self.outstanding[id][0].set_result((None, asyncio.TimeoutError()))
         future, _ = self.outstanding.pop(id)
-        future.set_exception(error)
 
-    def call(self, address, method, *args, **kwargs) -> asyncio.Future:
+    def call(self, addr, method, *args, **kwargs) -> asyncio.Future:
+        # Construct the RPC JSON message.
         request = self.create_request(method, *args, **kwargs)
-        text = json.dumps(request)
-        data = text.encode("utf-8")
-        self.transport.sendto(data, address)
+        text    = json.dumps(request)
+        data    = text.encode("utf-8")
+        self.transport.sendto(data, addr)
 
         # Schedule a timeout for the request.
         loop = asyncio.get_event_loop()
         future = loop.create_future()
         timer = loop.call_later(
             self.REQUEST_TIMEOUT,
-            self.on_request_timeout,
+            self._on_timeout,
             request["id"],
         )
 
@@ -123,6 +130,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
 
     def create_response(self, id, result, error) -> dict:
         return {
+            "type": "result",
             "id": id,
             "result": result,
             "error": None if not error else {
@@ -133,25 +141,26 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
 
     # --------------------------------------------------------------------------
     # RPC Functions
+    # --------------------------------------------------------------------------
 
-    async def rpc_ping(self, address: tuple, id: int) -> str:
+    async def rpc_ping(self, address: tuple, sender_id: int) -> int:
         '''
         Ping the node to check if it is alive.
         Params: address (tuple), id (int)
         Returns: id (int)
         '''
-        contact = Node(id, *address)
-        self.node.table.try_add(contact)
-        return self.node.id
+        contact = Node(sender_id, *address)
+        # self.node.table.greet(contact)
+        return self.client.node.id
 
-    async def rpc_find_node(self, addr: tuple, id: int, target: int) -> list:
+    async def rpc_find_node(self, addr: tuple, sender_id: int, target: int) -> list:
         '''
         Find the closest nodes to the given target.
         Params: address (tuple), id (int), target (int)
         Returns: list of (id, ip, port)
         '''
-        contact = Node(id, *addr)
-        self.node.table.try_add(contact)
+        contact = Node(sender_id, *addr)
+        self.node.table.greet(contact)
 
         # Find the closest nodes to the target (excluding the sender)
         nodes = self.node.table.find_kclosest(target, exclude=contact)
@@ -160,31 +169,62 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             for node in nodes
         ]
 
-    async def rpc_find_value(self, address, id, key) -> dict:
-        contact = Node(id, *address)
-        self.client.table.try_add(contact)
+    async def rpc_find_value(self, address, sender_id, key) -> dict:
+        contact = Node(sender_id, *address)
+        self.client.table.greet(contact)
         
-        file_path = self.client.storage.get(key, None)
         # If the node does not have the file, return the closest nodes.
-        if not file_path:
-            return await self.rpc_find_node(address, id, key)
+        if not (doc := self.client.storage.get(key, None)):
+            return await self.rpc_find_node(address, sender_id, key)
         
-        return {
-            "file_path": file_path,
-        }
+        return doc
     
-    async def rpc_store(self, address, id, key, file_path) -> None:
-        contact = Node(id, *address)
-        self.client.table.try_add(contact)
+    async def rpc_store(self, address: tuple, sender_id: int, key: int, new_doc: dict) -> None:
+        sender = Node(sender_id, *address)
+        self.client.table.greet(sender)
 
-        self.client.storage[key] = file_path
+        # If there is no song with the given key, then add it
+        if not (curr_doc := self.client.storage.get(key, None)):
+            self.client.storage[key] = new_doc
+            return
 
-    # TODO: This function?
-    # async def call_or_remove(self, id, address, method, *args, **kwargs) -> Any:
-    #     try:
-    #         return await self.call(address, method, *args, **kwargs)
-    #     except asyncio.TimeoutError as error:
-    #         # logger.warning("Peer timed out: %d", id)
-    #         # print("Wait a second,", id, "is dead!")
-    #         self.client.table.remove_contact(id)
-    #         raise error
+        curr_version = curr_doc["version"]
+        # If the doc is newer, update it (if there is a tie then compare by ID)
+        if new_doc["version"] >= curr_version:
+            if new_doc["version"] == curr_version:
+                if new_doc["id"] < sender_id:
+                    # If the incoming ID is smaller, then we keep the old doc
+                    return
+            # Otherwise, we update our local storage
+            self.client.storage[key] = new_doc
+
+    async def make_call(self, node, method, *args, **kwargs):
+        '''
+        Make a RPC call to a node and return the result.
+        Params: node (Node), method (str), *args, **kwargs
+        Returns: result (dict), error (str)
+        '''
+        logger.debug("Making call to %s", node)
+        addr = (node.ip, node.port)
+        result = await self.call(addr, method, self.client.node.id, *args, **kwargs)
+
+        # TODO: Error, right now it captures general errors and timeouts in same way
+        if result[1]:
+            logger.warning("Error calling %s on %s: %s", method, node, result[1])
+            self.client.table.remove_node(_id=node.id)
+            return result
+      
+        # If the node is new, greet it
+        self.client.table.greet(node)
+        return result
+
+    def __getattr__(self, method):
+        '''
+        Dynamically create a method for each RPC function.
+        Params: method (str)
+        Returns: function
+        
+        Example:
+        protocol.find_node(node_to_ask, target_node) -> find_node RPC
+        '''
+        return lambda node, *args, **kwargs: self.make_call(node, method, *args, **kwargs)
