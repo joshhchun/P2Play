@@ -1,10 +1,10 @@
-from __future__  import annotations
-from hashlib     import sha1
-from Routing     import RoutingTable
-from collections import namedtuple
-from Node        import Node
-from Protocol   import P2PlayProtocol
-from KClosestPeers import KClosestPeers
+from __future__           import annotations
+from hashlib              import sha1
+from collections          import namedtuple
+from p2play.Node          import Node
+from p2play.Routing       import RoutingTable
+from p2play.Protocol      import P2PlayProtocol
+from p2play.Crawler       import Crawler
 
 import asyncio
 import logging
@@ -36,7 +36,6 @@ class Peer:
         listen = loop.create_datagram_endpoint(self._create_factory, local_addr=(ip, port))
         logger.info(f'Listening on {self.node.ip}:{self.node.port}')
         self.transport, self.protocol = await listen
-        # TODO: Refresh Table
         self._schedule_refresh()
     
     def _schedule_refresh(self):
@@ -47,45 +46,17 @@ class Peer:
         loop = asyncio.get_event_loop()
         self.refresh = loop.call_later(3600, self._schedule_refresh)
     
-    # TODO: Finish
     async def _refresh_table(self):
         '''
         Refresh the buckets in the routing table that haven't had any lookups in 1 hour.
         '''
-        results = []
-        for node_id in self.protocol.get_refresh():
-            node = Node(_id=node_id)
-            nearest = self.table.find_kclosest(node_id, ALPHA)
-            # Crawl the network for it...
-            # Do not forget to update the buckets last updated time
+        for node_id in self.table.refresh_list:
+            node_to_find = Node(_id=node_id)
+            kclosest     = self.table.find_kclosest(node_id, ALPHA)
+            crawler      = Crawler(self.protocol, node_to_find, kclosest, self.k, self.alpha, self.protocol.find_node)
 
-    
-    async def iterative_node_lookup(self, target_id: int) -> list:
-        '''
-        Finds the closest k nodes to the target_id, iteratively.
-        '''
-        # Finds ALPHA (3) closest nodes to the target_id, and push to the closest list (acts as starting point)
-        neighbors    = self.table.find_kclosest(target_id, ALPHA)
-        closest_list = KClosestPeers(self.node)
-        closest_list.push_nodes(neighbors)
-
-        # Keep on going until there are no more nodes to contact
-        while not closest_list.completed:
-            # Get the next ALPHA nodes to send a find_node request to
-            nearest_nodes = closest_list.nearest(ALPHA)
-            for node in nearest_nodes:
-                closest_list.contacted.add(node.id)
-                if node.id == target_id:
-                    temp_list = self.table.find_kclosest(target_id)
-                    continue
-                else:
-                    # temp_list = self.find_node(node, target_id)
-                    temp_list = await self.protocol.make_call(node.id, 'find_node', node.id, (node.ip, node.port), target_id)
-                closest_list.push_nodes(temp_list)
-
-        # Return the k closest nodes to the target_id
-        return closest_list.result()
-
+            # Crawl the network for this node, adding the nodes we contact to the routing table
+            await crawler.lookup()
     
     async def _bootstrap_node(self, addr: tuple[str, int]):
         '''
@@ -116,10 +87,10 @@ class Peer:
         results = await asyncio.gather(*tasks)
 
         # Only keep the nodes that were successfully bootstrapped to
-        boostraps = [task for task in results if task]
-        print(f"Bootstrapped to {boostraps}")
+        bootstraps = [task for task in results if task]
         
-        # self.iterative_node_lookup(self.node.id)
+        network_crawler = Crawler(self.protocol, self.node, bootstraps, self.k, self.alpha, self.protocol.find_node)
+        return await network_crawler.lookup()
     
     def get_info(self):
         return (self.node.ip, self.node.port, self.node.id)

@@ -79,8 +79,8 @@ class Bucket:
         
         '''
         midpoint = (self.range[0] + self.range[1]) // 2
-        left = Bucket((self.range[0], midpoint), self.k)
-        right = Bucket((midpoint + 1, self.range[1]), self.k)
+        left     = Bucket((self.range[0], midpoint), self.k)
+        right    = Bucket((midpoint + 1, self.range[1]), self.k)
 
         for node in self.all_nodes:
             bucket = left if node.id <= midpoint else right
@@ -94,7 +94,7 @@ class Bucket:
         Params: _id - int
         Returns: bool
         '''
-        return self.range[0] <= _id < self.range[1]
+        return _id in range(self.range[0], self.range[1])
 
     @property
     def all_nodes(self) -> list[Node]:
@@ -127,6 +127,13 @@ class Bucket:
 
         # If all ids are same to the given length then return the length
         return len(shortest)
+    
+    def needs_refresh(self) -> bool:
+        '''
+        Returns whether there have been any lookups in this bucket within the last hour.
+        '''
+        hour = 3600
+        return time.monotonic_ns() - self.last_touched > hour * 1e9
 
             
         

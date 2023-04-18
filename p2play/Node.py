@@ -4,7 +4,7 @@ from hashlib    import sha1
 
 class Node:
     def __init__(self, _id: int = None, ip: str = None, port: int = None) -> None:
-        self.id      = _id or self.generate_id()
+        self.id      = _id if _id != None else self.generate_id()
         self.ip      = ip
         self.port    = port
 

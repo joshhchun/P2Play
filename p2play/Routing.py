@@ -2,6 +2,7 @@
 from p2play.Node import Node
 from p2play.Bucket import Bucket
 from p2play.ClosestNodesTraverser import ClosestNodesTraverser
+from random import randint
 import heapq
 import asyncio
 import logging
@@ -15,16 +16,36 @@ class RoutingTable:
         self.k         = 20
         self.k_buckets = [Bucket((0, 2**160), self.k)]
     
+    @property
+    def refresh_list(self) -> list:
+        '''
+        Returns a list of ID values that need to be refreshed
+        '''
+        for bucket in self.k_buckets:
+            if bucket.needs_refresh():
+                yield randint(*bucket.range)
+                
     def greet(self, node_to_greet: Node) -> None:
         '''
         Try to add node to routing table
 
         Sec 2.5 of paper
         '''
-        if self.add_node(node_to_greet):
-            return
+        if self.new_node(node_to_greet):
+            self.add_node(node_to_greet)
         # TODO: Send the new node the key-value pairs it should be storing
 
+
+    def new_node(self, node: Node) -> bool:
+        '''
+        Checks if the node is new to the routing table.
+        Params: Node
+        Returns: bool
+        '''
+        bucket = self.get_bucket(node.id)
+        if node.id in bucket:
+            return False
+        return True
     
     def add_node(self, node: Node) -> None:
         '''
@@ -103,18 +124,21 @@ class RoutingTable:
             if n.id == node.id:
                 return False
         return True
-    
-    def remove_node(self, node: Node, _id: int = None):
-        if _id:
-            node = Node(_id=_id)
-        bucket_index = self.get_bucket_index(node.id)
-        bucket = self.k_buckets[bucket_index]
-        if node in bucket:
-            bucket.remove(node)
 
     def get_bucket_index(self, node_id: int):
-        distance = node_id ^ self.node_id
-        return (distance).bit_length() - 1
+        '''
+        Get the index of the bucket that the node belongs to.
+        '''
+        for index, bucket in enumerate(self.k_buckets):
+            if node_id < bucket.range[1]:
+                return index
+        return None
+    
+    def get_bucket(self, node_id: int):
+        '''
+        Get the bucket that the node belongs to.
+        '''
+        return self.k_buckets[self.get_bucket_index(node_id)]
     
     def __repr__(self):
         result = []

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import json
 from   random import getrandbits
-from   Node import Node
+from   p2play.Node import Node
 
 logger = logging.getLogger(__name__)
 
