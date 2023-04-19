@@ -78,6 +78,13 @@ class RoutingTable:
             task = self._ping_LRU(bucket, node)
             asyncio.ensure_future(task)
     
+    def remove_node(self, node: Node) -> None:
+        '''
+        Removes a node from the routing table
+        '''
+        bucket = self.get_bucket(node.id)
+        bucket.remove_node(node)
+    
     def split_bucket(self, bucket_index: int, node: Node) -> None:
         '''
         Split the bucket at the given index.
@@ -139,7 +146,7 @@ class RoutingTable:
                 return index
         return None
     
-    def get_bucket(self, node_id: int):
+    def get_bucket(self, node_id: int) -> Bucket:
         '''
         Get the bucket that the node belongs to.
         '''

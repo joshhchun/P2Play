@@ -122,7 +122,7 @@ class Bucket:
         shortest = min(bin_strings, key=len)
         # Use zip to compare each bit of each id
         for i, bits in enumerate(zip(*bin_strings)):
-            if not all(x == bits[0] for x in bits):
+            if len(set(bits)) > 1:
                 return i
 
         # If all ids are same to the given length then return the length

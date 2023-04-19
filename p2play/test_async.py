@@ -18,7 +18,7 @@ async def add(x, y):
 async def main():
     file_name = "/Users/joshchun/Downloads/IMG_0063.MOV"
     asyncio.create_task(read_file(file_name))
-    print(await add(1, 2))
+    print("hi")
 
 if __name__ == '__main__':
     asyncio.run(main())

@@ -61,15 +61,9 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         data = text.encode("utf-8")
         self.transport.sendto(data, addr)
 
-    # TODO: Error handling
-    # def parse_error(self, response) -> Exception:
-    #     try:
-    #         type = eval(response["type"])
-    #         if issubclass(type, Exception):
-    #             return type(*response["args"])
-    #     finally:
-    #         # We could not figure out the type of the error.
-    #         return Exception(response["type"], *response["args"])
+        # If the request was to send a file, then make sure it happens
+        if response["method"] == "send_file":
+            asyncio.ensure_future(self.client._send_file(addr, *response["args"]))
 
     def handle_response(self, response: dict) -> None:
         '''
@@ -137,9 +131,20 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     # RPC Functions
     # --------------------------------------------------------------------------
 
+    async def rpc_send_file(self, addr: tuple, sender_id: int, filename: str) -> int:
+        '''
+        Handle a send_file request. 
+        Params: address (tuple), id (int), sender_id (int), filename (str)
+        Returns: id (int)
+        '''
+        contact = Node(sender_id, *addr)
+        self.client.table.greet(contact)
+
+        return self.client.node.id
+
     async def rpc_ping(self, addr: tuple, sender_id: int) -> int:
         '''
-        Ping the node to check if it is alive.
+        Handle a ping request. 
         Params: address (tuple), id (int)
         Returns: id (int)
         '''
@@ -206,7 +211,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         # TODO: Error, right now it captures general errors and timeouts in same way
         if result[1]:
             logger.warning("Error calling %s on %s: %s", method, node, result[1])
-            self.client.table.remove_node(_id=node.id)
+            self.client.table.remove_node(node)
             return result
       
         # If the node is new, greet it

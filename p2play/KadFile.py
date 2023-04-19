@@ -1,4 +1,5 @@
 from Peer import Peer
+import hashlib
 
 class KadFile:
     '''
@@ -33,9 +34,17 @@ class KadFile:
         Adds a provider server addr to the kad-file.
         '''
         self.providers.append((provider.node.id, provider.server_addr))
+        self.version += 1
+
+    @property
+    def key(self) -> str:
+        '''
+        The hashed key of the song id.
+        '''
+        return hashlib.sha1(self.song_id).hexdigest()
     
     @property
-    def dict(self):
+    def dict(self) -> dict:
         '''
         Returns a dictionary representation of the kad-file.
         '''
@@ -45,3 +54,7 @@ class KadFile:
             'artist_name': self.artist_name,
             'providers'  : self.providers
         }
+    
+    @property
+    def song_id(self) -> str:
+        return f"{self.song_name} - {self.artist_name}"

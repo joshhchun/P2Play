@@ -16,11 +16,10 @@ import logging
 import pathlib
 import os
 
-ALPHA      = 3
-logger     = logging.getLogger(__name__)
-PREFIX_LEN = 16
-KAD_DIR    = 'kad_files'
-
+ALPHA       = 3
+logger      = logging.getLogger(__name__)
+PREFIX_LEN  = 16
+KAD_DIR     = 'kad_files'
 
 class Peer:
     def __init__(self, _id = None):
@@ -32,7 +31,6 @@ class Peer:
         self.protocol      = self._create_factory()
         self.table         = RoutingTable(self.node.id, 20, self.protocol)
 
-        # TODO: Figure out storage 
         self.storage       = {}
     
     async def get(self, song_name: str, artist_name: str) -> KadFile:
@@ -49,7 +47,6 @@ class Peer:
         key = sha1(song_id.encode()).hexdigest()
 
         # Check if we already have the song
-        # TODO: Return what?
         if self.storage.get(key):
             return self.storage[key]
 
@@ -64,17 +61,16 @@ class Peer:
         # crawler.lookup() should return the kad_file with the highest version
         kad_file = await crawler.lookup()
         
-        # Add the node to the kad_file providers and add the kad_file to the storage
-        kad_file.add_provider(self)
-        self.storage[key] = kad_file
-        
         # Create a co-routine to download the file from the kad_file providers and return if it was successful
-        if (result := await self._download_file(kad_file)):
+        if await self._download_file(kad_file):
             logger.info(f'Successfully downloaded {song_id}')
+            kad_file.add_provider(self)
+            self.storage[key] = kad_file
+
             # Send STORE calls to the k closest nodes to the song id to let them know we have the file (ensure future but do not wait for them)
             kclosest_nodes = list(crawler.closest)
             for node in kclosest_nodes:
-                asyncio.create_task(self.protocol.store(node, key, kad_file.to_dict()))
+                asyncio.create_task(self.protocol.store(node, key, kad_file.dict))
             return kad_file
         else:
             logger.warning(f'Failed to download {song_id}')
@@ -98,6 +94,9 @@ class Peer:
                 future         = asyncio.open_connection(*addr)
                 reader, writer = await asyncio.wait_for(future, timeout=5)
 
+                # Send a `SEND_FILE` RPC request to the provider of the file
+                await self.protocol.send_file(addr, kad_file.key)
+
                 # Send the request to the provider for the file
                 writer.write(message)
                 await writer.drain()
@@ -107,12 +106,15 @@ class Peer:
                 buffer     = bytearray()
                 size       = int(prefix)
 
-                while len(buffer) < size:
-                    data = await reader.read(size - len(buffer))
-                    buffer += data
+                # Read exactly size # of bytes
+                buffer = await reader.readexactly(size)
+                writer.close()
+                await writer.wait_closed()
+
                 break
             except Exception as e:
                 logger.warning('Could not connect to provider for downloading %s: %s', node_id, e)
+                self.table.remove_node(Node(node_id))
         
         if not downloaded_file:
             logger.warning('Could not download file from any provider')
@@ -123,7 +125,7 @@ class Peer:
             os.makedirs(KAD_DIR)
         
         # Save the file to the kad_files directory with the song_id as the file name
-        kad_path = pathlib.Path(__file__).parent.absolute() / KAD_DIR
+        kad_path  = pathlib.Path(__file__).parent.absolute() / KAD_DIR
         file_path = pathlib.Path(kad_path, f"{kad_file.song_id}.kad")
         with open(file_path, 'wb') as f:
             f.write(buffer)
@@ -167,13 +169,48 @@ class Peer:
         kad_file = await self.get(song_name, artist_name)
         max_version = 0 if not kad_file else kad_file.version
 
-        # TODO: Store Node ID or Ip and port?
         return KadFile({
-            'version': max_version + 1,
-            'song_name': song_name,
+            'version'    : max_version + 1,
+            'song_name'  : song_name,
             'artist_name': artist_name,
-            'providers': [self.node]
+            'providers'  : [(self.node.id, self.node.addr)]
         })
+
+    async def send_file(self, sender_addr: tuple, sender_id: int, song_key: str) -> int:
+        '''
+        Sends the file to the requesting node.
+        Params: sender_addr (tuple), sender_id (int), song_key (str)
+        Returns: success (bool)
+        '''
+        if not (kad_file := self.storage.get(song_key)):
+            logger.warning('Could not find file %s in storage', song_key)
+            return False
+        
+        song_id = kad_file.song_id
+        song_path = pathlib.Path(__file__).parent.absolute() / KAD_DIR / f"{song_id}.kad"
+        logger.info(f'Sending {song_path} to {sender_id}...')
+
+        try:
+            # Read the file from the kad_files directory
+            with open(song_path, 'rb') as f:
+                buffer = f.read()
+
+            size = len(buffer)
+            prefix = f"{size}".zfill(PREFIX_LEN)
+            message = f"{prefix}{buffer}".encode("utf-8")
+
+            future         = asyncio.open_connection(*sender_addr)
+            _, writer = await asyncio.wait_for(future, timeout=5)
+
+            # Send the file to the requesting node
+            writer.write(message)
+            await writer.drain()
+
+            return True
+        except Exception as e:
+            logger.warning('Could not send file %s to %s: %s', song_path, sender_id, e)
+            return False
+        
 
     def _create_factory(self):
         '''
