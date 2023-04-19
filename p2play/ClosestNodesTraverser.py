@@ -1,6 +1,5 @@
 from __future__ import annotations
-from p2play.Node import Node
-
+from Node import Node
 
 class ClosestNodesTraverser:
 	'''

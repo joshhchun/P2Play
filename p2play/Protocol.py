@@ -2,7 +2,7 @@ import asyncio
 import logging
 import json
 from   random import getrandbits
-from   p2play.Node import Node
+from Node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +85,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         future, timeout = self.outstanding.pop(msg_id)
         timeout.cancel()
 
-        # TODO: Error handling
-        # if response["error"] is not None:
-        #     error = self.parse_error(response["error"])
-        #     return future.set_exception(error)
-
         future.set_result((response["result"], None))
-        self.client.table.greet()
 
     def create_request(self, method, *args, **kwargs) -> dict:
         return {
@@ -143,14 +137,15 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     # RPC Functions
     # --------------------------------------------------------------------------
 
-    async def rpc_ping(self, address: tuple, sender_id: int) -> int:
+    async def rpc_ping(self, addr: tuple, sender_id: int) -> int:
         '''
         Ping the node to check if it is alive.
         Params: address (tuple), id (int)
         Returns: id (int)
         '''
-        contact = Node(sender_id, *address)
-        # self.node.table.greet(contact)
+        contact = Node(sender_id, *addr)
+        self.client.table.greet(contact)
+
         return self.client.node.id
 
     async def rpc_find_node(self, addr: tuple, sender_id: int, target: int) -> list:
@@ -160,10 +155,10 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         Returns: list of (id, ip, port)
         '''
         contact = Node(sender_id, *addr)
-        self.node.table.greet(contact)
+        self.client.table.greet(contact)
 
         # Find the closest nodes to the target (excluding the sender)
-        nodes = self.node.table.find_kclosest(target, exclude=contact)
+        nodes = self.client.table.find_kclosest(target, exclude=contact)
         return [
             (node.id, node.ip, node.port)
             for node in nodes
@@ -198,13 +193,13 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             # Otherwise, we update our local storage
             self.client.storage[key] = new_doc
 
-    async def make_call(self, node, method, *args, **kwargs):
+    async def make_call(self, node: Node, method, *args, **kwargs):
         '''
         Make a RPC call to a node and return the result.
         Params: node (Node), method (str), *args, **kwargs
         Returns: result (dict), error (str)
         '''
-        logger.debug("Making call to %s", node)
+        logger.debug("Making %s call to %s: args[%s]", method, node, args)
         addr = (node.ip, node.port)
         result = await self.call(addr, method, self.client.node.id, *args, **kwargs)
 
@@ -218,6 +213,16 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         self.client.table.greet(node)
         return result
 
+    async def direct_call(self, addr, method, *args, **kwargs):
+        '''
+        Make a direct RPC call to an address instead of a node.
+        Params: addr (tuple), method (str), *args, **kwargs
+        Returns: result (dict), error (str)
+        '''
+        logger.debug("Making a direct %s call to %s: args[%s]", method, addr, args)
+        result = await self.call(addr, method, self.client.node.id, *args, **kwargs)
+        return result
+
     def __getattr__(self, method):
         '''
         Dynamically create a method for each RPC function.
@@ -227,4 +232,6 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         Example:
         protocol.find_node(node_to_ask, target_node) -> find_node RPC
         '''
+        if method.startswith("direct_"):
+            return lambda addr, *args, **kwargs: self.direct_call(addr, method[7:], *args, **kwargs)
         return lambda node, *args, **kwargs: self.make_call(node, method, *args, **kwargs)

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-from p2play.Node import Node
-from p2play.Bucket import Bucket
-from p2play.ClosestNodesTraverser import ClosestNodesTraverser
+# from p2play.Node import Node
+# from p2play.Bucket import Bucket
+# from p2play.ClosestNodesTraverser import ClosestNodesTraverser
+
+from Node import Node
+from Bucket import Bucket
+from ClosestNodesTraverser import ClosestNodesTraverser
+
 from random import randint
 import heapq
 import asyncio
@@ -145,7 +150,7 @@ class RoutingTable:
         for i, buck in enumerate(self.k_buckets):
             if len(buck) == 0:
                 continue
-            result.append(f'Bucket {i}: {buck}')
+            result.append(f'Bucket {i}: {list(buck.nodes.keys())}')
         return '\n'.join(result)
 
     def __len__(self):

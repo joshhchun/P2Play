@@ -1,5 +1,5 @@
 import time
-from p2play.Node import Node
+from Node import Node
 from collections import OrderedDict
 
 class Bucket:
@@ -134,6 +134,12 @@ class Bucket:
         '''
         hour = 3600
         return time.monotonic_ns() - self.last_touched > hour * 1e9
+
+    def __contains__(self, node_id: int) -> bool:
+        return node_id in self.nodes
+    
+    def __len__(self) -> int:
+        return len(self.nodes)
 
             
         
