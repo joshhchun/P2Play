@@ -3,6 +3,7 @@ import logging
 import json
 from   random import getrandbits
 from Node import Node
+from KadFile import KadFile
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +166,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         self.client.table.greet(contact)
         
         # If the node does not have the file, return the closest nodes.
-        if not (doc := self.client.storage.get(key, None)):
+        if not (doc := self.client.storage.get(key)):
             logger.debug("Node does not have file %s", key)
             logger.debug("Storage: %s", self.client.storage)
             return await self.rpc_find_node(address, sender_id, key)
@@ -179,8 +180,8 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         self.client.table.greet(sender)
 
         # If there is no song with the given key, then add it
-        if not (curr_doc := self.client.storage.get(key, None)):
-            self.client.storage[key] = new_doc
+        if not (curr_doc := self.client.storage.get(key)):
+            self.client.storage.add(key, KadFile(new_doc))
             return
 
         curr_version = curr_doc["version"]
@@ -191,7 +192,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
                     # If the incoming ID is smaller, then we keep the old doc
                     return
             # Otherwise, we update our local storage
-            self.client.storage[key] = new_doc
+            self.client.storage.add(key, KadFile(new_doc))
 
     async def make_call(self, node: Node, method, *args, **kwargs):
         '''

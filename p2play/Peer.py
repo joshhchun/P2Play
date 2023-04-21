@@ -1,15 +1,12 @@
 from __future__           import annotations
 from hashlib              import sha1
-# from p2play.Node          import Node
-# from p2play.Routing       import RoutingTable
-# from p2play.Protocol      import P2PlayProtocol
-# from p2play.Crawler       import Crawler
 from Node          import Node
 from Routing       import RoutingTable
 from Protocol      import P2PlayProtocol
 from Crawler       import Crawler
 from KadFile       import KadFile
 from typing import Union
+from time import monotonic_ns
 import json
 
 import asyncio
@@ -17,9 +14,62 @@ import logging
 import pathlib
 import os
 
-ALPHA       = 3
-logger      = logging.getLogger(__name__)
-PREFIX_LEN  = 16
+ALPHA              = 3
+logger             = logging.getLogger(__name__)
+PREFIX_LEN         = 16
+REPUBLISH_INTERVAL = 30
+REFRESH_INTERVAL   = 30
+
+
+class SongStorage:
+    '''
+    Storage class for kad-files
+    '''
+    def __init__(self):
+        self.data = {}
+    
+    def add(self, song_key: int, kad_file: KadFile):
+        '''
+        Add a kad-file to the storage with a timestamp
+        Params: song_id (int), kad_file (KadFile)
+        Returns: None
+        '''
+        self.data[song_key] = (kad_file, monotonic_ns())
+    
+    def get(self, song_key: int) -> Union[KadFile, None]:
+        '''
+        Retreive a kad-file from the storage.
+        Params: song_id (int)
+        Returns: kad_file (KadFile)
+        '''
+        if song_key in self.data:
+            return self.data[song_key][0]
+        return None
+    
+    def get_time(self, song_key: int) -> Union[int, None]:
+        '''
+        Retreive the timestamp of a kad-file from the storage.
+        Params: song_id (int)
+        Returns: timestamp (int)
+        '''
+        if song_key in self.data:
+            return self.data[song_key][1]
+        return None
+    
+    def get_republish_list(self, refresh_time: int) -> list[tuple[int, KadFile]]:
+        '''
+        Returns a list of (song_key: kad-files) that are older than refresh_time
+
+        # Sec 2.5 optimization
+        '''
+        min_time = monotonic_ns() - (refresh_time * 10**9)
+        for song_key, (kad_file, timestamp) in self.data.items():
+            if timestamp < min_time:
+                yield song_key, kad_file
+    
+    def __repr__(self):
+        return str(self.data)
+
 
 class Peer:
     def __init__(self, _id = None, k: int = 20):
@@ -31,7 +81,7 @@ class Peer:
         self.table         = RoutingTable(self.node.id, k, self.protocol)
         self.kad_path = pathlib.Path(__file__).parent.absolute() / 'kad_files'
 
-        self.storage       = {}
+        self.storage       = SongStorage()
     
     async def get(self, song_name: str, artist_name: str) -> Union[KadFile, None]:
         '''
@@ -45,11 +95,6 @@ class Peer:
         logger.info(f'Getting {song_id} from the network')
 
         key = int(sha1(song_id.encode()).hexdigest(), 16)
-
-        # TODO: Check if we already have the song
-        # if self.storage.get(key):
-        #     logger.debug(f'Already have {song_id}')
-        #     return self.storage[key]
 
         song_node = Node(_id=key)
         if not (closest_nodes := self.table.find_kclosest(song_node.id)):
@@ -70,7 +115,7 @@ class Peer:
         if await self._download_file(kad_file):
             logger.info(f'Successfully downloaded {song_id}')
             kad_file.add_provider(self)
-            self.storage[key] = kad_file.dict
+            self.storage.add(key, kad_file)
 
             # Send STORE calls to the k closest nodes to the song id to let them know we have the file (ensure future but do not wait for them)
             kclosest_nodes = list(crawler.closest)
@@ -250,19 +295,52 @@ class Peer:
         '''
         asyncio.ensure_future(self._refresh_table())
         loop = asyncio.get_event_loop()
-        self.refresh = loop.call_later(3600, self._schedule_refresh)
+        self.refresh = loop.call_later(REFRESH_INTERVAL, self._schedule_refresh)
     
     async def _refresh_table(self):
         '''
         Refresh the buckets in the routing table that haven't had any lookups in 1 hour.
         '''
+        tasks = []
         for node_id in self.table.refresh_list:
             node_to_find = Node(_id=node_id)
             kclosest     = self.table.find_kclosest(node_id, limit=ALPHA)
             crawler      = Crawler(self.protocol, node_to_find, kclosest, self.k, self.alpha, "find_node")
+            tasks.append(crawler.lookup())
 
-            # Crawl the network for this node, adding the nodes we contact to the routing table
-            await crawler.lookup()
+        # Crawl the network for each node in the refresh list
+        await asyncio.gather(*tasks)
+
+        # Republish all kad files to the network
+        for key, kad_file in self.storage.get_republish_list(REPUBLISH_INTERVAL):
+            # Ensure this future
+            asyncio.ensure_future(self._republish(key, kad_file))
+    
+    async def _republish(self, song_key: str, kad_file: KadFile):
+        '''
+        Helper function to republish an exisitng kad file to the network.
+        Params: song_key (str) 
+        Returns: None
+        '''
+        # Get k closest neighbors
+        if not (closest_nodes := self.table.find_kclosest(song_key)):
+            logger.warning('Could not find any nodes close to song ID for republishing: (%s, %s)', song_key, kad_file)
+            return
+        
+        # Crawl network to find k closest nodes
+        crawler  = Crawler(self.protocol, song_key, closest_nodes, self.k, self.alpha, "find_node")
+        kclosest = await crawler.lookup()
+
+        # Send store to kclosest
+        tasks = []
+        for node in kclosest:
+            tasks.append(self.protocol.store(node, song_key, kad_file))
+        await asyncio.gather(*tasks)
+
+        
+
+
+            
     
     async def _bootstrap_node(self, addr: tuple[str, int]):
         '''

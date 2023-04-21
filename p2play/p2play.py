@@ -31,9 +31,10 @@ async def shell(peer):
     Asynchronously keep reading commands from command line
     '''
     get_input = partial(asyncio.get_event_loop().run_in_executor, ThreadPoolExecutor(1))
+
     while True:
-        # x = await aioconsole.ainput(">>> ")
         message = await get_input(input, ">>> ")
+
         if message.startswith("put"):
             line = message.rstrip().split(' ')
             song_name, artist_name = line[1], line[2]
@@ -45,7 +46,7 @@ async def shell(peer):
             print(f"Getting {song_name} by {artist_name}")
             kad_file = await peer.get(song_name, artist_name)
             if kad_file:
-                print(f"Succesfully retrieved {song_name} by {artist_name} version {kad_file.version}") 
+                print(f"Succesfully retrieved {song_name} by {artist_name}: storing {kad_file.version}") 
             else:
                 print(f"Could not find {song_name} by {artist_name}")
         if message.startswith("storage"):

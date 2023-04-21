@@ -12,7 +12,6 @@ class KadFile:
         Constructs a kad-file from a dictionary.
         '''
         if not self.correct_format(dict_kad_file):
-            # TODO: Figure out what to do if there is an error
             raise ValueError('Incorrect format for kad-file')
         
         self.version     = dict_kad_file['version']
