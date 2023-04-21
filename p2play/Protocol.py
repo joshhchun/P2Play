@@ -62,10 +62,6 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         data = text.encode("utf-8")
         self.transport.sendto(data, addr)
 
-        # If the request was to send a file, then make sure it happens
-        if method == "send_file":
-            asyncio.ensure_future(self.client.send_file(addr, *request["args"]))
-
     def handle_response(self, response: dict) -> None:
         '''
         Handle a response from a RPC call we made
@@ -133,18 +129,6 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     # --------------------------------------------------------------------------
     # RPC Functions
     # --------------------------------------------------------------------------
-
-    async def rpc_send_file(self, addr: tuple, sender_id: int, song_key: int) -> int:
-        '''
-        Handle a send_file request. 
-        Params: address (tuple), id (int), sender_id (int), filename (str)
-        Returns: id (int)
-        '''
-        logger.debug("Received send_file request from %s", sender_id)
-        contact = Node(sender_id, *addr)
-        self.client.table.greet(contact)
-
-        return self.client.node.id
 
     async def rpc_ping(self, addr: tuple, sender_id: int) -> int:
         '''

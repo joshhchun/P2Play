@@ -29,7 +29,7 @@ class Peer:
         self.alpha         = 3   
         self.protocol      = self._create_factory()
         self.table         = RoutingTable(self.node.id, 20, self.protocol)
-        self.kad_path      = pathlib.Path(__file__).parent.absolute() / 'kad_files'
+        self.kad_path = pathlib.Path(__file__).parent.absolute() / 'kad_files'
 
         self.storage       = {}
     
@@ -41,7 +41,7 @@ class Peer:
         '''
 
         # Creating the song_id "song_name - artist_name"
-        song_id = f"{song_name} - {artist_name}"
+        song_id = f"{song_name}-{artist_name}"
         logger.info(f'Getting {song_id} from the network')
 
         key = int(sha1(song_id.encode()).hexdigest(), 16)
@@ -69,9 +69,8 @@ class Peer:
         # Create a co-routine to download the file from the kad_file providers and return if it was successful
         if await self._download_file(kad_file):
             logger.info(f'Successfully downloaded {song_id}')
-            logger.debug(f'Successfully downloaded {song_id}')
             kad_file.add_provider(self)
-            self.storage[key] = kad_file
+            self.storage[key] = kad_file.dict
 
             # Send STORE calls to the k closest nodes to the song id to let them know we have the file (ensure future but do not wait for them)
             kclosest_nodes = list(crawler.closest)
@@ -90,39 +89,34 @@ class Peer:
         Returns: success (bool)
         '''
         downloaded_file = False
+        request         = json.dumps({"song_id": kad_file.song_id})
+        prefix          = f"{len(request)}".zfill(PREFIX_LEN)
+        message 	    = f"{prefix}{request}".encode("utf-8")
 
         logger.debug("Providers for file: %s", kad_file.providers)
         for provider in kad_file.providers:
             node_id, addr = provider 
             try:
                 logger.debug("In _download_file, connecting to %s", addr)
-                # Send a `SEND_FILE` RPC request to the provider of the file
-                await self.protocol.direct_send_file(tuple(addr), kad_file.song_id)
-                logger.debug("Sent the send_file RPC request to the provider")
-                buffer = None
 
-                async def _download_file_handler(reader, writer):
-                    logger.debug("In _download_file_handler")
+                # Connect to the provider
+                reader, writer = await asyncio.open_connection(*addr)	
+                writer.write(message)
+                await writer.drain()
 
-                    # Read the file from the provider
-                    prefix     = await reader.read(PREFIX_LEN).decode("utf-8")
-                    logger.debug("Successfully read the prefix from the provider, prefix: %s", prefix)
-                    buffer     = bytearray()
-                    size       = int(prefix)
+                # Read the prefix from the provider
+                prefix     = await reader.readexactly(PREFIX_LEN)
+                prefix     = prefix.decode("utf-8")
+                size       = int(prefix)
+                logger.debug("Successfully read the prefix from the provider, size: %s", size)
 
-                    # Read exactly size # of bytes
-                    buffer = await reader.readexactly(size)
-                    buffer = buffer.decode("utf-8")
-                    logger.debug("Successfully read the file from the provider, buffer: %s", buffer)
-                    writer.close()
-                    await writer.wait_closed()
-                
-                server = await asyncio.start_server(_download_file_handler, host=self.node.ip, port=self.node.port)
-                # Run server until complete
-                async with server:
-                    await server.start_serving()
-                
-                logger.debug("Successfully connected to the provider")
+                # Read exactly size # of bytes
+                song_data = await reader.readexactly(size)
+
+                # song_data = await reader.readexactly(size)
+                logger.debug("Successfully read the file from the provider of size: %s", len(song_data))
+                writer.close()
+                await writer.wait_closed()
                 downloaded_file = True
                 break
             except Exception as e:
@@ -138,11 +132,10 @@ class Peer:
         if not os.path.exists(self.kad_path):
             os.makedirs(self.kad_path)
         
-        # Save the file to the kad_files directory with the song_id as the file name
-        # TODO: Change the path back to original
+        # Save the file to the kad_files directory with the song_id as the file name (TODO: Save as .kad or maybe send the file extensinon)
         file_path = pathlib.Path(self.kad_path, f"{kad_file.song_id}.kad.new")
         with open(file_path, 'wb') as f:
-            f.write(buffer)
+            f.write(song_data)
         return True
     
         
@@ -152,7 +145,7 @@ class Peer:
         Params: song_name (str), artist_name (str)
         Returns: success (bool)
         '''
-        song_id = f"{song_name} - {artist_name}"
+        song_id = f"{song_name}-{artist_name}"
         logger.info(f'Putting {song_id} on the network')
         key       = int(sha1(song_id.encode()).hexdigest(), 16)
         song_node = Node(_id=key)
@@ -190,46 +183,6 @@ class Peer:
             'artist_name': artist_name,
             'providers'  : [(self.node.id, (self.node.ip, self.node.port))]
         }), crawler.closest
-
-    async def send_file(self, sender_addr: tuple, sender_id: int, song_id: str) -> int:
-        '''
-        Sends the file to the requesting node.
-        Params: sender_addr (tuple), sender_id (int), song_key (str)
-        Returns: success (bool)
-        '''
-        logger.debug("In send_file, sending file %s to %s", song_id, sender_addr)
-        # if not (kad_file := self.storage.get(song_key)):
-        #     logger.warning('Could not find file %s in storage', song_key)
-        #     return False
-
-        song_path = pathlib.Path(self.kad_path) / f"{song_id}.kad"
-        logger.info(f'Sending {song_path} to {sender_id}...')
-
-        try:
-            # Read the file from the kad_files directory
-            with open(song_path, 'rb') as f:
-                buffer = f.read()
-
-            size = len(buffer)
-            prefix = f"{size}".zfill(PREFIX_LEN)
-            message = f"{prefix}{buffer}".encode("utf-8")
-
-            logger.debug("In send_file, trying to connect to %s", sender_addr)
-            _, writer = await asyncio.open_connection(*sender_addr)
-            logger.debug("In send_file, successfully connected to %s", sender_addr)
-            # future         = asyncio.open_connection(*sender_addr)
-            # _, writer = await asyncio.wait_for(future, timeout=10)
-
-            # Send the file to the requesting node
-            writer.write(message)
-            logger.debug("In send_file, successfully wrote to %s", sender_addr)
-            await writer.drain()
-            await writer.wait_closed()
-
-            return True
-        except Exception as e:
-            logger.warning('Could not send file %s to %s: %s', song_path, sender_id, e)
-            return False
         
 
     def _create_factory(self):
@@ -248,6 +201,48 @@ class Peer:
         logger.info(f'Listening on {self.node.ip}:{self.node.port}')
         self.transport, self.protocol = await listen
         self._schedule_refresh()
+        asyncio.ensure_future(self._init_server())
+
+    async def _init_server(self):
+        server = await asyncio.start_server(self._server_handler, self.node.ip, self.node.port)
+        logger.debug("In _init_server, server started on %s:%s", self.node.ip, self.node.port)
+        async with server:
+            await server.serve_forever()
+
+    async def _server_handler(self, reader, writer):
+        sender_addr = writer.get_extra_info('peername')
+  
+        # Read prefix len of message from socket
+        prefix  = await reader.read(PREFIX_LEN)
+        prefix  = prefix.decode()
+        size    = int(prefix)
+
+        logger.debug("In send_file, read prefix %s from %s", prefix, sender_addr)
+  
+        # Read request from socket
+        data      = await reader.readexactly(size)
+        data      = data.decode()
+        request   = json.loads(data)
+        song_id   = request['song_id']
+        song_path = pathlib.Path(self.kad_path) / f"{song_id}.kad"
+
+        logger.debug("In send_file, read request %s from %s", request, sender_addr)
+
+        # Read the file from the kad_files directory
+        with open(song_path, 'rb') as f:
+            buffer = f.read()
+
+        size    = len(buffer)
+        prefix  = f"{size}".zfill(PREFIX_LEN).encode("utf-8")
+        message = prefix + buffer
+
+        logger.debug("In send_file, sending file of size %s", size)
+
+        # Send the file to the requesting node
+        writer.write(message)
+        logger.debug("In send_file, successfully wrote to %s", sender_addr)
+        await writer.drain()
+        await writer.wait_closed()
     
     def _schedule_refresh(self):
         '''

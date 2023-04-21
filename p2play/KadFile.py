@@ -32,7 +32,7 @@ class KadFile:
         '''
         Adds a provider server addr to the kad-file.
         '''
-        self.providers.append((provider.node.id, provider.server_addr))
+        self.providers.append((provider.node.id, (provider.node.ip, provider.node.port)))
         self.version += 1
 
     @property
@@ -56,4 +56,4 @@ class KadFile:
     
     @property
     def song_id(self) -> str:
-        return f"{self.song_name} - {self.artist_name}"
+        return f"{self.song_name}-{self.artist_name}"
