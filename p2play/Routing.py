@@ -57,9 +57,8 @@ class RoutingTable:
         Adds a node to the routing table.
         Params: Node
         Returns: None
-          '''
-        index  = self.get_bucket_index(node.id)
-        bucket = self.k_buckets[index]
+        '''
+        bucket = self.get_bucket(node.id)
 
         # If bucket is not full then simply add the node and return
         if bucket.add_node(node):
@@ -118,8 +117,11 @@ class RoutingTable:
         bucket_index = self.get_bucket_index(target.id)
         closest_list = []
 
+        logger.debug("In find_kclosest with target: %s, limit: %s, and exclude: %s", target, limit, exclude)
+
         for node in ClosestNodesTraverser(self.k_buckets, bucket_index):
-            if exclude and node.same_addr(exclude):
+            if exclude and (node.id == exclude.id):
+                logger.debug("Excluding node %s", node)
                 continue
             if node.id == target.id:
                 continue

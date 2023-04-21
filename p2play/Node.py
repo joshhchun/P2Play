@@ -1,6 +1,9 @@
 from __future__ import annotations
 from random     import getrandbits
 from hashlib    import sha1
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Node:
     def __init__(self, _id: int = None, ip: str = None, port: int = None) -> None:
@@ -19,6 +22,7 @@ class Node:
         return self.id ^ other.id
     
     def same_addr(self, node: Node) -> bool:
+        logger.debug("Comparing %s to %s with self: (%s:%s) and node: (%s:%s)", self, node, self.ip, self.port, node.ip, node.port)
         return self.ip == node.ip and self.port == node.port
 
     def __repr__(self):

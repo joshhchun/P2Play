@@ -1,4 +1,3 @@
-from Peer import Peer
 import hashlib
 
 class KadFile:
@@ -29,7 +28,7 @@ class KadFile:
         fields = ['version', 'song_name', 'artist_name', 'providers']
         return all(field in dict_kad_file for field in fields)
     
-    def add_provider(self, provider: Peer):
+    def add_provider(self, provider):
         '''
         Adds a provider server addr to the kad-file.
         '''
@@ -37,11 +36,11 @@ class KadFile:
         self.version += 1
 
     @property
-    def key(self) -> str:
+    def key(self) -> int:
         '''
         The hashed key of the song id.
         '''
-        return hashlib.sha1(self.song_id).hexdigest()
+        return int(hashlib.sha1(self.song_id.encode()).hexdigest(), 16)
     
     @property
     def dict(self) -> dict:

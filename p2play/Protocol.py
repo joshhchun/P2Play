@@ -10,7 +10,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     '''
     Protocol implementation for the P2Play protocol using asyncio to handle async IO.
     '''
-    REQUEST_TIMEOUT = 2.0
+    REQUEST_TIMEOUT = 5.0
 
     def __init__(self, client) -> None:
         '''
@@ -41,9 +41,10 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             case _:
                 logger.warning("Received invalid message from %s: %s", addr, text)
 
-    async def handle_request(self, response: dict, addr: str) -> None:
-        method   = response["method"]
+    async def handle_request(self, request: dict, addr: str) -> None:
+        method   = request["method"]
         func     = getattr(self, "rpc_%s" % method)
+        logger.debug("Received RPC request from %s: %s", addr, request)
 
         # Make sure the method exists and is callable.
         if func is None or not callable(func):
@@ -51,19 +52,19 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             return
 
         try:
-            result = await func(addr, *response["args"])
-            response = self.create_response(response["id"], result, None)
+            result = await func(addr, *request["args"])
+            response = self.create_response(request["id"], result, None)
         except Exception as e:
             logger.exception("Error handling RPC request from %s: %s", addr, method)
-            response = self.create_response(response["id"], None, e)
+            response = self.create_response(request["id"], None, e)
 
         text = json.dumps(response)
         data = text.encode("utf-8")
         self.transport.sendto(data, addr)
 
         # If the request was to send a file, then make sure it happens
-        if response["method"] == "send_file":
-            asyncio.ensure_future(self.client._send_file(addr, *response["args"]))
+        if method == "send_file":
+            asyncio.ensure_future(self.client.send_file(addr, *request["args"]))
 
     def handle_response(self, response: dict) -> None:
         '''
@@ -71,6 +72,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         Params: response (dict)
         Returns: None
         '''
+        logger.debug("Received response: %s", response)
         msg_id = response["id"]
         if msg_id not in self.outstanding:
             logger.warning("Received response for unknown request: %s", msg_id)
@@ -98,6 +100,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     def call(self, addr, method, *args, **kwargs) -> asyncio.Future:
         # Construct the RPC JSON message.
         request = self.create_request(method, *args, **kwargs)
+        logger.debug("Sending RPC request to %s: %s", addr, request)
         text    = json.dumps(request)
         data    = text.encode("utf-8")
         self.transport.sendto(data, addr)
@@ -131,12 +134,13 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     # RPC Functions
     # --------------------------------------------------------------------------
 
-    async def rpc_send_file(self, addr: tuple, sender_id: int, filename: str) -> int:
+    async def rpc_send_file(self, addr: tuple, sender_id: int, song_key: int) -> int:
         '''
         Handle a send_file request. 
         Params: address (tuple), id (int), sender_id (int), filename (str)
         Returns: id (int)
         '''
+        logger.debug("Received send_file request from %s", sender_id)
         contact = Node(sender_id, *addr)
         self.client.table.greet(contact)
 
@@ -148,6 +152,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         Params: address (tuple), id (int)
         Returns: id (int)
         '''
+        logger.debug("Received ping request from %s", sender_id)
         contact = Node(sender_id, *addr)
         self.client.table.greet(contact)
 
@@ -164,22 +169,28 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
 
         # Find the closest nodes to the target (excluding the sender)
         nodes = self.client.table.find_kclosest(target, exclude=contact)
+        logger.debug("Received find_node request from (%s, %s) for %s with result: %s, with exclude: %s", sender_id, addr, target, nodes, contact)
         return [
             (node.id, node.ip, node.port)
             for node in nodes
         ]
 
     async def rpc_find_value(self, address, sender_id, key) -> dict:
+        logger.debug("Received find_value request from %s for %s", sender_id, key)
         contact = Node(sender_id, *address)
         self.client.table.greet(contact)
         
         # If the node does not have the file, return the closest nodes.
         if not (doc := self.client.storage.get(key, None)):
+            logger.debug("Node does not have file %s", key)
+            logger.debug("Storage: %s", self.client.storage)
             return await self.rpc_find_node(address, sender_id, key)
         
+        logger.debug("Node has file %s", key)
         return doc
     
     async def rpc_store(self, address: tuple, sender_id: int, key: int, new_doc: dict) -> None:
+        logger.debug("Received store request from %s for %s:%s", sender_id, key, new_doc)
         sender = Node(sender_id, *address)
         self.client.table.greet(sender)
 
