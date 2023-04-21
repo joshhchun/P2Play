@@ -22,13 +22,13 @@ logger      = logging.getLogger(__name__)
 PREFIX_LEN  = 16
 
 class Peer:
-    def __init__(self, _id = None):
+    def __init__(self, _id = None, k: int = 20):
         self.node          = Node(_id=_id)
         # TODO: Figure out this server port thing
-        self.k             = 20
+        self.k             = k
         self.alpha         = 3   
         self.protocol      = self._create_factory()
-        self.table         = RoutingTable(self.node.id, 20, self.protocol)
+        self.table         = RoutingTable(self.node.id, k, self.protocol)
         self.kad_path = pathlib.Path(__file__).parent.absolute() / 'kad_files'
 
         self.storage       = {}

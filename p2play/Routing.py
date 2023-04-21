@@ -18,7 +18,7 @@ class RoutingTable:
     def __init__(self, id: int , k: int, protocol):
         self.protocol  = protocol
         self.node_id   = id
-        self.k         = 20
+        self.k         = k
         self.k_buckets = [Bucket((0, 2**160), self.k)]
     
     @property
