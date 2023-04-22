@@ -50,8 +50,7 @@ async def shell(peer):
             else:
                 print(f"Could not find {song_name} by {artist_name}")
         if message.startswith("storage"):
-            print("Storage: ")
-            pprint.pprint(peer.storage)
+            print(peer.storage)
         if message.startswith("table"):
             print(peer.table)
         # Flush stdout

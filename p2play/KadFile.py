@@ -1,4 +1,5 @@
 import hashlib
+import random
 
 class KadFile:
     '''
@@ -18,6 +19,7 @@ class KadFile:
         self.song_name   = dict_kad_file['song_name']
         self.artist_name = dict_kad_file['artist_name']
         self.providers   = dict_kad_file['providers']
+        self.id          = dict_kad_file["id"]
     
     def correct_format(self, dict_kad_file: dict) -> bool:
         '''
@@ -50,9 +52,22 @@ class KadFile:
             'version'    : self.version,
             'song_name'  : self.song_name,
             'artist_name': self.artist_name,
-            'providers'  : self.providers
+            'providers'  : self.providers,
+            'id'         : self.id
         }
     
     @property
     def song_id(self) -> str:
         return f"{self.song_name}-{self.artist_name}"
+    
+    def __repr__(self):
+        string = []
+        string.append(f" Version     : {self.version}\n")
+        string.append(f"\t\tSong Name   : {self.song_name}\n")
+        string.append(f"\t\tArtist Name : {self.artist_name}\n")
+        _id = self.id if len(str(self.id)) <= 10 else str(self.id)[:10] + '...'
+        string.append(f"\t\tSong ID     : {_id}\n")
+        string.append(f"\t\tProviders   : \n")
+        for provider in self.providers:
+            string.append(f"\t\t\t{provider}\n")
+        return ''.join(string)

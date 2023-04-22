@@ -5,6 +5,7 @@ from Routing       import RoutingTable
 from Protocol      import P2PlayProtocol
 from Crawler       import Crawler
 from KadFile       import KadFile
+from random       import getrandbits
 from typing import Union
 from time import monotonic_ns
 import json
@@ -17,8 +18,8 @@ import os
 ALPHA              = 3
 logger             = logging.getLogger(__name__)
 PREFIX_LEN         = 16
-REPUBLISH_INTERVAL = 30
-REFRESH_INTERVAL   = 30
+REPUBLISH_INTERVAL = 3600
+REFRESH_INTERVAL   = 3600
 
 
 class SongStorage:
@@ -68,7 +69,13 @@ class SongStorage:
                 yield song_key, kad_file
     
     def __repr__(self):
-        return str(self.data)
+        string = ['SongStorage:\n']
+        for song_key, (kad_file, timestamp) in self.data.items():
+            if len(str(song_key)) > 10:
+                song_key = str(song_key)[:10] + '...'
+            string.append(f"{song_key}: {kad_file}")
+        return ''.join(string)
+        
 
 
 class Peer:
@@ -199,6 +206,9 @@ class Peer:
             return False
         kad_file, closest_nodes = result
 
+        # Store the kad-file in the local storage
+        self.storage.add(key, kad_file)
+
         # Send a STORE call to each of the k closest nodes
         futures = [self.protocol.store(node, key, kad_file.dict) for node in closest_nodes]
          
@@ -226,7 +236,8 @@ class Peer:
             'version'    : max_version + 1,
             'song_name'  : song_name,
             'artist_name': artist_name,
-            'providers'  : [(self.node.id, (self.node.ip, self.node.port))]
+            'providers'  : [(self.node.id, (self.node.ip, self.node.port))],
+            'id'         : getrandbits(160)
         }), crawler.closest
         
 
@@ -328,19 +339,17 @@ class Peer:
             return
         
         # Crawl network to find k closest nodes
-        crawler  = Crawler(self.protocol, song_key, closest_nodes, self.k, self.alpha, "find_node")
+        target_node = Node(_id=song_key)
+        crawler  = Crawler(self.protocol, target_node, closest_nodes, self.k, self.alpha, "find_node")
         kclosest = await crawler.lookup()
 
         # Send store to kclosest
         tasks = []
         for node in kclosest:
-            tasks.append(self.protocol.store(node, song_key, kad_file))
+            tasks.append(self.protocol.store(node, song_key, kad_file.dict))
         await asyncio.gather(*tasks)
 
         
-
-
-            
     
     async def _bootstrap_node(self, addr: tuple[str, int]):
         '''

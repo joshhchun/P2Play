@@ -172,10 +172,11 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             return await self.rpc_find_node(address, sender_id, key)
         
         logger.debug("Node has file %s", key)
-        return doc
+        return doc.dict
     
     async def rpc_store(self, address: tuple, sender_id: int, key: int, new_doc: dict) -> None:
         logger.debug("Received store request from %s for %s:%s", sender_id, key, new_doc)
+        print(f"Received store request from {sender_id} for {key}:{new_doc}")
         sender = Node(sender_id, *address)
         self.client.table.greet(sender)
 
@@ -184,7 +185,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             self.client.storage.add(key, KadFile(new_doc))
             return
 
-        curr_version = curr_doc["version"]
+        curr_version = curr_doc.version
         # If the doc is newer, update it (if there is a tie then compare by ID)
         if new_doc["version"] >= curr_version:
             if new_doc["version"] == curr_version:
