@@ -44,6 +44,7 @@ class KClosestNodes:
         
         for node in nodes:
             if node.id == self.node.id:
+                logger.debug("In push_nodes, FOUND TARGET NODE %s", node.id)
                 self.mark_contacted(node)
             self.push(node)
     

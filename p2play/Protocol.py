@@ -11,7 +11,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     '''
     Protocol implementation for the P2Play protocol using asyncio to handle async IO.
     '''
-    REQUEST_TIMEOUT = 5.0
+    REQUEST_TIMEOUT = 2.0
 
     def __init__(self, client) -> None:
         '''
@@ -89,8 +89,9 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             "kwargs" : kwargs,
         }
 
-    def _on_timeout(self, id) -> None:
-        logger.error("Request %d timed out.", id)
+    def _on_timeout(self, id, sender_id, method, addr) -> None:
+        logger.error("Request %d from %s to %s for %s timed out.", id, sender_id, addr, method)
+        # logger.error("Request %d timed out.", id)
         self.outstanding[id][0].set_result((None, asyncio.TimeoutError()))
         future, _ = self.outstanding.pop(id)
 
@@ -109,6 +110,9 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
             self.REQUEST_TIMEOUT,
             self._on_timeout,
             request["id"],
+            request["args"][0],
+            method,
+            addr
         )
 
         # Store the future for later so we can set the result of it. Keep the
@@ -153,7 +157,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         self.client.table.greet(contact)
 
         # Find the closest nodes to the target (excluding the sender)
-        nodes = self.client.table.find_kclosest(target, exclude=contact)
+        nodes = self.client.table.find_kclosest(target, self.client.k, exclude=contact)
         logger.debug("Received find_node request from (%s, %s) for %s with result: %s, with exclude: %s", sender_id, addr, target, nodes, contact)
         return [
             (node.id, node.ip, node.port)
@@ -176,7 +180,6 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     
     async def rpc_store(self, address: tuple, sender_id: int, key: int, new_doc: dict) -> None:
         logger.debug("Received store request from %s for %s:%s", sender_id, key, new_doc)
-        print(f"Received store request from {sender_id} for {key}:{new_doc}")
         sender = Node(sender_id, *address)
         self.client.table.greet(sender)
 

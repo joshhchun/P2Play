@@ -104,7 +104,7 @@ class Peer:
         key = int(sha1(song_id.encode()).hexdigest(), 16)
 
         song_node = Node(_id=key)
-        if not (closest_nodes := self.table.find_kclosest(song_node.id)):
+        if not (closest_nodes := self.table.find_kclosest(song_node.id, self.k)):
             logger.warning('Could not find any nodes close to song ID: %s', song_id)
             return None
         
@@ -223,7 +223,7 @@ class Peer:
         Returns: KadFile
         '''
         # Get k closest neighbors
-        if not (closest_nodes := self.table.find_kclosest(song_node.id)):
+        if not (closest_nodes := self.table.find_kclosest(song_node.id, self.k)):
             logger.warning('Could not find any nodes close to song ID: %s', song_node.id)
             return None
 
@@ -334,7 +334,7 @@ class Peer:
         Returns: None
         '''
         # Get k closest neighbors
-        if not (closest_nodes := self.table.find_kclosest(song_key)):
+        if not (closest_nodes := self.table.find_kclosest(song_key, self.k)):
             logger.warning('Could not find any nodes close to song ID for republishing: (%s, %s)', song_key, kad_file)
             return
         
@@ -385,6 +385,20 @@ class Peer:
         
         network_crawler = Crawler(self.protocol, self.node, bootstraps, self.k, self.alpha, "find_node")
         return await network_crawler.lookup()
+    
+    async def find_contact(self, target_id: int, k: int):
+        target = Node(_id=target_id)
+
+        kclosest = self.table.find_kclosest(target_id, limit=self.k, exclude=self.node)
+        logger.debug(f'In find_contact, kclosest neighbors: {kclosest}')
+        crawler = Crawler(self.protocol, target, kclosest, k, self.alpha, "find_node")
+        result = await crawler.lookup()
+
+        for node in result:
+            if node.id == target_id:
+                return (True, result)
+        return (False, result)
+
     
     def get_info(self):
         return (self.node.ip, self.node.port, self.node.id)

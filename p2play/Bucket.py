@@ -1,6 +1,9 @@
 import time
 from Node import Node
 from collections import OrderedDict
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Bucket:
     def __init__(self, _range: tuple[int, int], k: int) -> None:
@@ -30,6 +33,7 @@ class Bucket:
         elif len(self.nodes) < self.k:
             self.nodes[node.id] = node
         else:
+            logger.debug(f'Bucket full, adding node %s to replacement cache', node.id)
             self._add_replacement(node)
             return False
         return True
@@ -140,6 +144,9 @@ class Bucket:
     
     def __len__(self) -> int:
         return len(self.nodes)
+    
+    def __repr__(self):
+        print(f'Bucket: {self.range}')
 
             
         

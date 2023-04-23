@@ -37,6 +37,7 @@ class RoutingTable:
         Sec 2.5 of paper
         '''
         if self.new_node(node_to_greet):
+            logger.debug("In greet, greeting new node with id: %s", node_to_greet.id)
             self.add_node(node_to_greet)
         # TODO: Send the new node the key-value pairs it should be storing
 
@@ -58,7 +59,8 @@ class RoutingTable:
         Params: Node
         Returns: None
         '''
-        bucket = self.get_bucket(node.id)
+        index = self.get_bucket_index(node.id)
+        bucket = self.k_buckets[index]
 
         # If bucket is not full then simply add the node and return
         if bucket.add_node(node):
@@ -66,11 +68,8 @@ class RoutingTable:
         
         # If the bucket is full and if the buckets range includes the node's id, then split the bucket
         # Sec 4.2
-        '''
-        If we just see if range includes nodes own id, also splits ranges not containing node's id
-        up to b-1 levels. If b=2, then half of the ID space not containing the nodes id 
-          '''
         if bucket.in_range(node.id) or bucket.depth % 5:
+            logger.debug(f'Splitting bucket {index}')
             self.split_bucket(index, node)
             self.add_node(node)
         else:
@@ -107,7 +106,7 @@ class RoutingTable:
             logger.info(f'Adding {node_to_add.id} to the bucket.')
             self.add_node(node_to_add)
 
-    def find_kclosest(self, target_id: int, limit: int = 20, exclude=None) -> list[Node]:
+    def find_kclosest(self, target_id: int, limit: int = 20, exclude: Node =None) -> list[Node]:
         '''
         Returns the k closest nodes to the target_id.
         Params: target_id - int, limit - int
