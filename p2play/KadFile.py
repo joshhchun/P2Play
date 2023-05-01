@@ -1,5 +1,7 @@
 import hashlib
-import random
+from time import monotonic_ns
+from typing import Union, Iterable
+
 
 class KadFile:
     '''
@@ -71,3 +73,60 @@ class KadFile:
         for provider in self.providers:
             string.append(f"\t\t\t{provider}\n")
         return ''.join(string)
+
+
+class SongStorage:
+    '''
+    Storage class for kad-files
+    '''
+    def __init__(self):
+        self.data = {}
+    
+    def add(self, song_key: int, kad_file: KadFile):
+        '''
+        Add a kad-file to the storage with a timestamp
+        Params: song_id (int), kad_file (KadFile)
+        Returns: None
+        '''
+        self.data[song_key] = (kad_file, monotonic_ns())
+    
+    def get(self, song_key: int) -> Union[KadFile, None]:
+        '''
+        Retreive a kad-file from the storage.
+        Params: song_id (int)
+        Returns: kad_file (KadFile)
+        '''
+        if song_key in self.data:
+            return self.data[song_key][0]
+        return None
+    
+    def get_time(self, song_key: int) -> Union[int, None]:
+        '''
+        Retreive the timestamp of a kad-file from the storage.
+        Params: song_id (int)
+        Returns: timestamp (int)
+        '''
+        if song_key in self.data:
+            return self.data[song_key][1]
+        return None
+    
+
+    def get_republish_list(self, refresh_time: int) -> Iterable[tuple[int, KadFile]]:
+        '''
+        Returns a list of (song_key: kad-files) that are older than refresh_time
+
+        # Sec 2.5 optimization
+        '''
+        min_time = monotonic_ns() - (refresh_time * 10**9)
+        for song_key, (kad_file, timestamp) in self.data.items():
+            if timestamp < min_time:
+                yield song_key, kad_file
+    
+    def __repr__(self):
+        string = ['SongStorage:\n']
+        for song_key, (kad_file, _) in self.data.items():
+            if len(str(song_key)) > 10:
+                song_key = str(song_key)[:10] + '...'
+            string.append(f"{song_key}: {kad_file}")
+        return ''.join(string)
+        

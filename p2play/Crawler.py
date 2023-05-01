@@ -1,5 +1,5 @@
-from Node import Node
-from KadFile import KadFile
+from p2play.Node import Node
+from p2play.KadFile import KadFile
 import asyncio
 import heapq
 import logging

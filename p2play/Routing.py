@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-# from p2play.Node import Node
-# from p2play.Bucket import Bucket
-# from p2play.ClosestNodesTraverser import ClosestNodesTraverser
-
-from Node import Node
-from Bucket import Bucket
-from ClosestNodesTraverser import ClosestNodesTraverser
+from p2play.Node                  import Node
+from p2play.Bucket                import Bucket
+from p2play.ClosestNodesTraverser import ClosestNodesTraverser
 
 from random import randint
 import heapq
@@ -116,21 +112,21 @@ class RoutingTable:
         bucket_index = self.get_bucket_index(target.id)
         closest_list = []
 
-        logger.debug("In find_kclosest with target: %s, limit: %s, and exclude: %s", target, limit, exclude)
+        logger.debug("In find_kclosest with target: %s, limit: %s, exclude: %s, and buck_index: %s", target, limit, exclude, bucket_index)
 
         for node in ClosestNodesTraverser(self.k_buckets, bucket_index):
             if exclude and (node.id == exclude.id):
                 logger.debug("Excluding node %s", node)
                 continue
-            if node.id == target.id:
-                continue
+            # if node.id == target.id:
+            #     continue
+            logger.debug("Adding node %s to closest_list", node)
             distance = target.distance(node)
             heapq.heappush(closest_list, (distance, node.id, node.ip, node.port))
             if len(closest_list) == limit:
                 break 
         
         return [Node(*args) for _, *args in heapq.nsmallest(limit, closest_list)]
-  
     
     def not_in_bucket(self, bucket, node):
         for n in bucket:

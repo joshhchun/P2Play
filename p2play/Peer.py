@@ -1,15 +1,14 @@
-from __future__           import annotations
-from hashlib              import sha1
-from Node          import Node
-from Routing       import RoutingTable
-from Protocol      import P2PlayProtocol
-from Crawler       import Crawler
-from KadFile       import KadFile
-from random       import getrandbits
-from typing import Union
-from time import monotonic_ns
-import json
+from __future__      import annotations
 
+from p2play.Node     import Node
+from p2play.Routing  import RoutingTable
+from p2play.Protocol import P2PlayProtocol
+from p2play.Crawler  import Crawler, KClosestNodes
+from p2play.KadFile  import KadFile, SongStorage
+from random          import getrandbits
+from typing          import Union
+from hashlib         import sha1
+import json
 import asyncio
 import logging
 import pathlib
@@ -22,72 +21,14 @@ REPUBLISH_INTERVAL = 3600
 REFRESH_INTERVAL   = 3600
 
 
-class SongStorage:
-    '''
-    Storage class for kad-files
-    '''
-    def __init__(self):
-        self.data = {}
-    
-    def add(self, song_key: int, kad_file: KadFile):
-        '''
-        Add a kad-file to the storage with a timestamp
-        Params: song_id (int), kad_file (KadFile)
-        Returns: None
-        '''
-        self.data[song_key] = (kad_file, monotonic_ns())
-    
-    def get(self, song_key: int) -> Union[KadFile, None]:
-        '''
-        Retreive a kad-file from the storage.
-        Params: song_id (int)
-        Returns: kad_file (KadFile)
-        '''
-        if song_key in self.data:
-            return self.data[song_key][0]
-        return None
-    
-    def get_time(self, song_key: int) -> Union[int, None]:
-        '''
-        Retreive the timestamp of a kad-file from the storage.
-        Params: song_id (int)
-        Returns: timestamp (int)
-        '''
-        if song_key in self.data:
-            return self.data[song_key][1]
-        return None
-    
-    def get_republish_list(self, refresh_time: int) -> list[tuple[int, KadFile]]:
-        '''
-        Returns a list of (song_key: kad-files) that are older than refresh_time
-
-        # Sec 2.5 optimization
-        '''
-        min_time = monotonic_ns() - (refresh_time * 10**9)
-        for song_key, (kad_file, timestamp) in self.data.items():
-            if timestamp < min_time:
-                yield song_key, kad_file
-    
-    def __repr__(self):
-        string = ['SongStorage:\n']
-        for song_key, (kad_file, timestamp) in self.data.items():
-            if len(str(song_key)) > 10:
-                song_key = str(song_key)[:10] + '...'
-            string.append(f"{song_key}: {kad_file}")
-        return ''.join(string)
-        
-
-
 class Peer:
     def __init__(self, _id = None, k: int = 20):
         self.node          = Node(_id=_id)
-        # TODO: Figure out this server port thing
         self.k             = k
         self.alpha         = 3   
         self.protocol      = self._create_factory()
         self.table         = RoutingTable(self.node.id, k, self.protocol)
-        self.kad_path = pathlib.Path(__file__).parent.absolute() / 'kad_files'
-
+        self.kad_path      = pathlib.Path(__file__).parent.absolute() / 'kad_files'
         self.storage       = SongStorage()
     
     async def get(self, song_name: str, artist_name: str) -> Union[KadFile, None]:
@@ -181,11 +122,13 @@ class Peer:
             return False
 
         # TODO: Put this somewhere else. Create KAD_DIR if it does not exist
-        if not os.path.exists(self.kad_path):
-            os.makedirs(self.kad_path)
+        download_kad_path = pathlib.Path(self.kad_path, "downloaded")
+        if not os.path.exists(download_kad_path):
+            os.makedirs(download_kad_path)
         
+        #TODO: change back to normal
         # Save the file to the kad_files directory with the song_id as the file name (TODO: Save as .kad or maybe send the file extensinon)
-        file_path = pathlib.Path(self.kad_path, f"{kad_file.song_id}.kad.new")
+        file_path = pathlib.Path(download_kad_path, f"{kad_file.song_id}.kad.new")
         with open(file_path, 'wb') as f:
             f.write(song_data)
         return True
@@ -216,7 +159,7 @@ class Peer:
         return any(await asyncio.gather(*futures))
 
     
-    async def _construct_kad_file(self, song_name: str, artist_name: str, song_node: Node) -> KadFile: 
+    async def _construct_kad_file(self, song_name: str, artist_name: str, song_node: Node) -> Union[None, tuple[KadFile, KClosestNodes]]: 
         '''
         Given a song name and artist name, constructs a new kad-file.
         Params: song_name (str), artist_name (str)

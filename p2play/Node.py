@@ -11,9 +11,6 @@ class Node:
         self.ip      = ip
         self.port    = port
 
-    # def __iter__(self):
-    #     return iter([self.ip, self.port, self.node_id])
-
     def generate_id(self) -> int:
         rand_num = getrandbits(160)
         return int(sha1(rand_num.to_bytes(160)).hexdigest(), 16)
