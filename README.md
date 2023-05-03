@@ -23,4 +23,4 @@ Note that the `<bootstraps>` should be in the following form
 
 # Uploading / Storing Files
 - After downloading a song from the network, the song will be stored in a `kad_files` directory under the `p2play` directory in the repo. This directory will automatically be created if it does not exist.
-- To upload songs to the network, the user should create a directory called `kad_files` under the sub `p2play` directory if they do not have one already. They should then move any songs they want to put on the network in this directory. The user must rename the songs to fit the name scheme of P2Play, (e.g. `SongName - ArtistName.kad`)
+- To upload songs to the network, the user should create a directory called `kad_files` under the sub `p2play` directory if they do not have one already. They should then move any songs they want to put on the network in this directory. The user must rename the songs to fit the name scheme of P2Play, (e.g. `SongName-ArtistName.kad`)
