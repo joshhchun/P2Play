@@ -3,9 +3,9 @@
 # from p2play.Bucket import Bucket
 # from p2play.ClosestNodesTraverser import ClosestNodesTraverser
 
-from Node import Node
-from Bucket import Bucket
-from ClosestNodesTraverser import ClosestNodesTraverser
+from p2play.Node import Node
+from p2play.Bucket import Bucket
+from p2play.ClosestNodesTraverser import ClosestNodesTraverser
 
 from random import randint
 import heapq

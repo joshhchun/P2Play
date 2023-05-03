@@ -1,5 +1,5 @@
 from __future__ import annotations
-from Node import Node
+from p2play.Node import Node
 import logging
 
 logger = logging.getLogger(__name__)
