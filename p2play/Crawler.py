@@ -1,5 +1,5 @@
-from p2play.Node import Node
-from p2play.KadFile import KadFile
+from Node import Node
+from KadFile import KadFile
 import asyncio
 import heapq
 import logging
@@ -104,6 +104,7 @@ class Crawler:
         self.target        = target
         self.method_name   = method_name
         self.method        = getattr(self.protocol, method_name)
+        self.num_lookups   = 0
 
 
     async def lookup(self):
@@ -114,6 +115,7 @@ class Crawler:
 
         # Get ALPHA # of nodes to contact
         for node in self.closest.nearest():
+            self.num_lookups += 1
             # Keep track of the node and its future
             id_future_mapping[node.id] = self.method(node, self.target.id)
             self.closest.mark_contacted(node)

@@ -2,8 +2,8 @@ import asyncio
 import logging
 import json
 from   random import getrandbits
-from p2play.Node import Node
-from p2play.KadFile import KadFile
+from Node import Node
+from KadFile import KadFile
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +38,14 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
                 task = self.handle_request(response, addr)
                 return asyncio.ensure_future(task)
             case "result":
-                return self.handle_response(response)
+                return self.handle_response(response, addr)
             case _:
                 logger.warning("Received invalid message from %s: %s", addr, text)
 
     async def handle_request(self, request: dict, addr: str) -> None:
         method   = request["method"]
         func     = getattr(self, "rpc_%s" % method)
-        logger.debug("Received RPC request from %s: %s", addr, request)
+        logger.debug("Received %s RPC request from %s: %s", method, addr, request)
 
         # Make sure the method exists and is callable.
         if func is None or not callable(func):
@@ -63,13 +63,13 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         data = text.encode("utf-8")
         self.transport.sendto(data, addr)
 
-    def handle_response(self, response: dict) -> None:
+    def handle_response(self, response: dict, addr: str) -> None:
         '''
         Handle a response from a RPC call we made
         Params: response (dict)
         Returns: None
         '''
-        logger.debug("Received response: %s", response)
+        logger.debug("Received response from %s: %s", addr, response)
         msg_id = response["id"]
         if msg_id not in self.outstanding:
             logger.warning("Received response for unknown request: %s", msg_id)
@@ -98,7 +98,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
     def call(self, addr, method, *args, **kwargs) -> asyncio.Future:
         # Construct the RPC JSON message.
         request = self.create_request(method, *args, **kwargs)
-        logger.debug("Sending RPC request to %s: %s", addr, request)
+        # logger.debug("Sending RPC request to %s: %s", addr, request)
         text    = json.dumps(request)
         data    = text.encode("utf-8")
         self.transport.sendto(data, addr)
@@ -141,7 +141,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         Params: address (tuple), id (int)
         Returns: id (int)
         '''
-        logger.debug("Received ping request from %s", sender_id)
+        # logger.debug("Received ping request from %s", sender_id)
         contact = Node(sender_id, *addr)
         self.client.table.greet(contact)
 
@@ -158,14 +158,14 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
 
         # Find the closest nodes to the target (excluding the sender)
         nodes = self.client.table.find_kclosest(target, self.client.k, exclude=contact)
-        logger.debug("Received find_node request from (%s, %s) for %s with result: %s, with exclude: %s", sender_id, addr, target, nodes, contact)
+        # logger.debug("Received find_node request from (%s, %s) for %s with result: %s, with exclude: %s", sender_id, addr, target, nodes, contact)
         return [
             (node.id, node.ip, node.port)
             for node in nodes
         ]
 
     async def rpc_find_value(self, address, sender_id, key) -> dict:
-        logger.debug("Received find_value request from %s for %s", sender_id, key)
+        # logger.debug("Received find_value request from %s for %s", sender_id, key)
         contact = Node(sender_id, *address)
         self.client.table.greet(contact)
         
@@ -179,7 +179,7 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         return doc.dict
     
     async def rpc_store(self, address: tuple, sender_id: int, key: int, new_doc: dict) -> None:
-        logger.debug("Received store request from %s for %s:%s", sender_id, key, new_doc)
+        # logger.debug("Received store request from %s for %s:%s", sender_id, key, new_doc)
         sender = Node(sender_id, *address)
         self.client.table.greet(sender)
 
@@ -204,8 +204,8 @@ class P2PlayProtocol(asyncio.DatagramProtocol):
         Params: node (Node), method (str), *args, **kwargs
         Returns: result (dict), error (str)
         '''
-        logger.debug("Making %s call to %s: args[%s]", method, node, args)
         addr = (node.ip, node.port)
+        logger.debug("Making %s call to %s (%s): args[%s]", method, node, addr, args)
         result = await self.call(addr, method, self.client.node.id, *args, **kwargs)
 
         # TODO: Error, right now it captures general errors and timeouts in same way

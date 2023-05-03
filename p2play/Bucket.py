@@ -1,5 +1,5 @@
 import time
-from p2play.Node import Node
+from Node import Node
 from collections import OrderedDict
 import logging
 

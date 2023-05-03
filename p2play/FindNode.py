@@ -54,7 +54,7 @@ async def shell(peer):
 
 
 def main():
-    peer = Peer(k=8)
+    peer = Peer()
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
